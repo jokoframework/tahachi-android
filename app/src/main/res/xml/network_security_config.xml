@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">sodep.com.py</domain>
+    </domain-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <pin-set expiration="2024-12-01">
+            <!-- Pin set para joko backend default ssl -->
+            <pin digest="SHA-256">izjXafWBcP7PrmyF10V/f61VZa6KKH937xUFyGyslzs=</pin>
+        </pin-set>
+        <domain includeSubdomains="true">192.168.9.57</domain>
+        <domain includeSubdomains="true">hq.sodep.com.py</domain>
+    </domain-config>
+</network-security-config>

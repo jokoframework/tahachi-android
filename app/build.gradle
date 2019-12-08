@@ -1,0 +1,63 @@
+apply plugin: 'com.android.application'
+apply plugin: "org.sonarqube"
+
+android {
+    compileSdkVersion 29
+    buildToolsVersion "29.0.0"
+    defaultConfig {
+        applicationId "io.github.jokoframework.tahachi"
+        minSdkVersion 23
+        targetSdkVersion 29
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        ndk.abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+        if(project.hasProperty('joko_ssl_crt')) {
+            buildConfigField "String", "JOKO_SSL_CRT", "\"${joko_ssl_crt}\""
+        } else {
+            buildConfigField "String", "JOKO_SSL_CRT", "\"\""
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        applicationVariants.all { variant ->
+            variant.outputs.all { output ->
+                def newApkName = applicationId + "-" + variant.versionName + "-v" + variant.versionCode + ".apk";
+                outputFileName = new File(newApkName);
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility 1.8
+        targetCompatibility 1.8
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'androidx.appcompat:appcompat:1.1.0'
+    implementation 'androidx.constraintlayout:constraintlayout:1.1.3'
+    implementation 'com.google.android.material:material:1.0.0'
+    testImplementation 'junit:junit:4.12'
+    androidTestImplementation 'androidx.test:runner:1.2.0'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.2.0'
+    implementation 'com.squareup.retrofit2:adapter-rxjava2:2.6.2'
+    implementation 'com.squareup.retrofit2:converter-gson:2.6.2'
+    implementation 'com.squareup.retrofit2:retrofit:2.6.2'
+    implementation 'org.apache.commons:commons-lang3:3.9'
+    implementation 'com.squareup.okhttp3:logging-interceptor:4.1.1'
+
+
+}
+
+sonarqube {
+    properties {
+        property "sonar.projectName","Tahachi"
+        property "sonar.projectKey", "io.github.jokoframework.tahachi"
+        property "sonar.sources", "./src/main/java"
+    }
+}
