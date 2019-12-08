@@ -36,3 +36,5 @@ It connects to a REST-API using JWT and self-signed certificate.
 2. Better graphics and UX
 3. Handle edge conditions/errors more gracefully
 
+ * Based on [Android example](https://github.com/googlearchive/android-FingerprintDialog)
+ 
