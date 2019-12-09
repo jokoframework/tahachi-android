@@ -36,7 +36,7 @@ It connects to a REST-API using JWT and self-signed certificate.
 1. Automatically select desktop's IP address matching connected Wifi SSID
 2. Better graphics and UX
 3. Handle edge conditions/errors more gracefully
-4. Update to [Android Q Biometrics capabilities] (https://source.android.com/security/biometric/)
+4. Update to [Android Q Biometrics capabilities](https://source.android.com/security/biometric/)
 
  * Based on [Android example](https://github.com/googlearchive/android-FingerprintDialog)
  
