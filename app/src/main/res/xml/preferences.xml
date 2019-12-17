@@ -31,6 +31,18 @@
         android:key="@string/valid_token"
         android:persistent="true"
         android:title="@string/valid_token_label" />
+    <PreferenceCategory android:title="@string/credentials">
+        <EditTextPreference
+            android:key="@string/username"
+            android:persistent="true"
+            android:title="@string/username_description"
+            android:inputType="text"/>
+        <EditTextPreference
+            android:key="@string/password"
+            android:persistent="true"
+            android:title="@string/password_description"
+            android:inputType="textPassword"/>
+    </PreferenceCategory>
     <PreferenceCategory android:title="@string/host_label">
         <ListPreference
             android:entries="@array/trusted_hosts_descriptions"
