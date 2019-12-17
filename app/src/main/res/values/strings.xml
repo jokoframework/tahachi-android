@@ -6,10 +6,9 @@
     <string name="cancel">Cancel</string>
     <string name="sign_in">Sign in</string>
     <string name="ok">OK</string>
-    <string name="password">Password</string>
     <string name="fingerprint_description">Confirm fingerprint to continue</string>
     <string name="fingerprint_hint">Touch sensor</string>
-    <string name="password_description">Enter your store password to continue</string>
+    <string name="password_description">Password</string>
     <string name="tahachi">Tahachi</string>
     <string name="tahachi_not_invalidated">Tahachi not invalidated</string>
     <string name="tahachi_button_not_invalidated_description">
@@ -35,6 +34,10 @@
     <string name="select_desktop_label">Pick your Desktop</string>
     <string name="default_host_label">Default Desktop</string>
     <string name="use_only_default_label_label">Use only Default Desktop</string>
+    <string name="username">user_jwt</string>
+    <string name="password">password_jwt</string>
+    <string name="username_description">Username</string>
+    <string name="credentials">Login Credentials</string>
     <string-array name="trustedHosts">
         <item>https://192.168.9.57:8443</item>
         <item>https://127.0.0.1:8443</item>

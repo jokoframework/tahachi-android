@@ -32,6 +32,8 @@ import android.view.View;
 import android.widget.ImageButton;
 import android.widget.Toast;
 
+import com.auth0.android.jwt.JWT;
+
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.ByteArrayInputStream;
@@ -51,6 +53,7 @@ import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Date;
 import java.util.List;
 
 import javax.crypto.BadPaddingException;
@@ -59,10 +62,8 @@ import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.KeyGenerator;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
-import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
@@ -73,6 +74,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import io.github.jokoframework.tahachi.activity.SettingsActivity;
 import io.github.jokoframework.tahachi.dto.JokoBaseResponse;
+import io.github.jokoframework.tahachi.dto.LoginResponse;
+import io.github.jokoframework.tahachi.dto.request.JokoLoginRequest;
 import io.github.jokoframework.tahachi.exceptions.TahachiException;
 import io.github.jokoframework.tahachi.repository.JokoBackendService;
 import io.github.jokoframework.tahachi.security.FingerprintAuthenticationDialogFragment;
@@ -98,6 +101,8 @@ public class MainActivity extends AppCompatActivity {
     private static final String SECRET_MESSAGE = "Very secret message";
     private static final String KEY_NAME_NOT_INVALIDATED = "key_not_invalidated";
     public static final String DEFAULT_KEY_NAME = "default_key";
+    public static final String ACCESS_TOKEN = "accessToken";
+    public static final String REFRESH_TOKEN = "refreshToken";
     private boolean locking;
 
     private KeyStore mKeyStore;
@@ -107,6 +112,8 @@ public class MainActivity extends AppCompatActivity {
     private JokoBackendService jokoBackendService;
     private List<String> trustedHosts;
     private String jokoToken;
+    private String username;
+    private String password;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -191,7 +198,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void initializeRestServices() {
         String defaultDesktop = getString(R.string.default_desktop);
-        validateToken();
+        validateCredentials();
         String baseUrlHash = mSharedPreferences
                 .getString(getString(R.string.host_selected), getString(R.string.default_desktop));
         if (mSharedPreferences.getBoolean(getString(R.string.use_default_desktop), false)) {
@@ -200,15 +207,81 @@ public class MainActivity extends AppCompatActivity {
         } else {
             createJokoService(baseUrlHash);
         }
-
+        renewTokens();
     }
 
-    private void validateToken() {
-        jokoToken = mSharedPreferences
-                .getString(getString(R.string.valid_token), null);
-        if (StringUtils.isBlank(jokoToken)) {
-            Toast.makeText(this, "Go to settings -> add a valid JWT",
-                    Toast.LENGTH_SHORT).show();
+    private void renewTokens() {
+        JokoLoginRequest loginRequest = new JokoLoginRequest(username, password);
+        if (needsToRenewToken(ACCESS_TOKEN)) {
+            Call<LoginResponse> response = jokoBackendService.login(loginRequest);
+            response.enqueue(new Callback<LoginResponse>() {
+                @Override
+                public void onResponse(Call<LoginResponse> call, Response<LoginResponse> response) {
+                    if (response.code() == 200 && response.isSuccessful()) {
+                        LoginResponse loginResponse = response.body();
+                        Log.i(TAG, String.format("Request correctamente invocado HTTP CODE: %s", response.code()));
+                        mSharedPreferences.edit().putString(ACCESS_TOKEN, loginResponse.getSecret()).commit();
+                        refreshToken();
+                    } else {
+                        Log.i(TAG, String.format("No se pudo ejecutar correctamente el request. HTTP Code recibido: %s", response.code()));
+                    }
+                    Log.d(TAG, response.toString());
+                }
+
+                @Override
+                public void onFailure(Call<LoginResponse> call, Throwable t) {
+                    Log.e(TAG, "No se pudo completar el request", t);
+                }
+            });
+        }
+    }
+
+    public boolean needsToRenewToken(String preferenceName) {
+        boolean renew = true;
+        String accessToken = mSharedPreferences.getString(preferenceName, null);
+        if(StringUtils.isNotEmpty(accessToken)) {
+            Date rightThisMinute = new Date();
+            JWT jwt = new JWT(accessToken);
+            renew = rightThisMinute.after(jwt.getExpiresAt());
+        }
+        return renew;
+    }
+
+    private void refreshToken() {
+        String accessToken = mSharedPreferences.getString(ACCESS_TOKEN, null);
+        if(needsToRenewToken(REFRESH_TOKEN)) {
+            Call<LoginResponse> refreshResponse = jokoBackendService.userAccess(accessToken);
+            refreshResponse.enqueue(new Callback<LoginResponse>() {
+                @Override
+                public void onResponse(Call<LoginResponse> call, Response<LoginResponse> response) {
+                    if (response.code() == 200 && response.isSuccessful()) {
+                        LoginResponse refreshResponse = response.body();
+                        mSharedPreferences.edit().putString(REFRESH_TOKEN, refreshResponse.getSecret()).commit();
+                        Log.i(TAG, String.format("Request correctamente invocado HTTP CODE: %s", response.code()));
+                        jokoToken = refreshResponse.getSecret();
+                    } else {
+                        Log.i(TAG, String.format("No se pudo ejecutar correctamente el request. HTTP Code recibido: %s", response.code()));
+                    }
+                    Log.d(TAG, response.toString());
+                }
+
+                @Override
+                public void onFailure(Call<LoginResponse> call, Throwable t) {
+                    Log.e(TAG, "No se pudo completar el request", t);
+                }
+            });
+        }
+    }
+
+    private void validateCredentials() {
+        username = mSharedPreferences
+                .getString(getString(R.string.username), null);
+        password = mSharedPreferences
+                .getString(getString(R.string.password), null);
+
+        if (StringUtils.isEmpty(username) || StringUtils.isEmpty(password)) {
+            Toast.makeText(this, "Go to settings to add valid credentials",
+                    Toast.LENGTH_LONG).show();
         }
     }
 
@@ -305,7 +378,7 @@ public class MainActivity extends AppCompatActivity {
     // Show confirmation, if fingerprint was used show crypto information.
     private void showConfirmation(byte[] encrypted) {
         Call<JokoBaseResponse> response;
-        validateToken();
+        validateCredentials();
         if (isLocking()) {
             response = jokoBackendService.lockDesktop(jokoToken);
             findViewById(R.id.confirmation_message).setVisibility(View.VISIBLE);
@@ -332,7 +405,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         if (encrypted != null) {
-            Log.d(TAG, "Credenciales corectas.");
+            Log.d(TAG, "Credenciales correctas.");
         }
     }
 
@@ -579,6 +652,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        validateToken();
+        validateCredentials();
     }
 }
