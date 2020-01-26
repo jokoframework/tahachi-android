@@ -8,11 +8,11 @@ android {
         applicationId "io.github.jokoframework.tahachi"
         minSdkVersion 23
         targetSdkVersion 29
-        versionCode 2
-        versionName "1.0.2"
+        versionCode 4
+        versionName "1.0.4"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         ndk.abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
-        if(project.hasProperty('joko_ssl_crt')) {
+        if (project.hasProperty('joko_ssl_crt')) {
             buildConfigField "String", "JOKO_SSL_CRT", "\"${joko_ssl_crt}\""
         } else {
             buildConfigField "String", "JOKO_SSL_CRT", "\"\""
@@ -51,13 +51,15 @@ dependencies {
     implementation 'org.apache.commons:commons-lang3:3.9'
     implementation 'com.squareup.okhttp3:logging-interceptor:4.2.2'
     implementation 'com.auth0.android:jwtdecode:1.4.0'
+    implementation "androidx.preference:preference:1.1.0"
+    implementation files('libs/sneaker.aar')
 
 
 }
 
 sonarqube {
     properties {
-        property "sonar.projectName","Tahachi"
+        property "sonar.projectName", "Tahachi"
         property "sonar.projectKey", "io.github.jokoframework.tahachi"
         property "sonar.sources", "./src/main/java"
     }

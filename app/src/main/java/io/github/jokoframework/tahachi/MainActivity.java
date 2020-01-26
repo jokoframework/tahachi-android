@@ -15,13 +15,17 @@
  */
 package io.github.jokoframework.tahachi;
 
+import android.Manifest;
 import android.app.KeyguardManager;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.hardware.fingerprint.FingerprintManager;
+import android.net.wifi.SupplicantState;
+import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.preference.PreferenceManager;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyPermanentlyInvalidatedException;
 import android.security.keystore.KeyProperties;
@@ -30,15 +34,19 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.ImageButton;
-import android.widget.Toast;
+import android.widget.TextView;
 
 import com.auth0.android.jwt.JWT;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Type;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
@@ -54,7 +62,13 @@ import java.security.cert.CertificateFactory;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
@@ -72,16 +86,21 @@ import javax.net.ssl.X509TrustManager;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.preference.PreferenceManager;
 import io.github.jokoframework.tahachi.activity.SettingsActivity;
 import io.github.jokoframework.tahachi.dto.JokoBaseResponse;
 import io.github.jokoframework.tahachi.dto.LoginResponse;
 import io.github.jokoframework.tahachi.dto.request.JokoLoginRequest;
 import io.github.jokoframework.tahachi.exceptions.TahachiException;
+import io.github.jokoframework.tahachi.helper.CrudHelper;
+import io.github.jokoframework.tahachi.helper.PermissionsHelper;
 import io.github.jokoframework.tahachi.repository.JokoBackendService;
 import io.github.jokoframework.tahachi.security.FingerprintAuthenticationDialogFragment;
+import io.github.jokoframework.tahachi.util.MessagesUtil;
 import okhttp3.CertificatePinner;
 import okhttp3.OkHttpClient;
 import okhttp3.logging.HttpLoggingInterceptor;
+import pojo.PermissionMessage;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
@@ -103,6 +122,9 @@ public class MainActivity extends AppCompatActivity {
     public static final String DEFAULT_KEY_NAME = "default_key";
     public static final String ACCESS_TOKEN = "accessToken";
     public static final String REFRESH_TOKEN = "refreshToken";
+    private static final String MAP_SSID_TO_HOST = "mapSSID2Host";
+    public static final String UNKNOWN_SSID = "<unknown ssid>";
+    public static final String BLACKLIST = "blacklist";
     private boolean locking;
 
     private KeyStore mKeyStore;
@@ -111,9 +133,13 @@ public class MainActivity extends AppCompatActivity {
     private Retrofit retrofit;
     private JokoBackendService jokoBackendService;
     private List<String> trustedHosts;
-    private String jokoToken;
     private String username;
     private String password;
+    private boolean mPermissionDenied;
+    private String baseURL;
+    private String currentSSID;
+    private TextView console;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -121,10 +147,32 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
-        if (initSecureCredentials()) {
-            return;
+        console = findViewById(R.id.console);
+        boolean initialized = initSecureCredentials();
+        if (initialized) {
+            MessagesUtil.showErrorMessage(this,
+                    "Failed secure storage initialization. \nPlease check your fingerprint settings");
+        } else {
+            CrudHelper.setContext(this);
+            checkForPermissions();
+            initializeRestServices();
         }
-        initializeRestServices();
+    }
+
+    private void checkForPermissions() {
+        boolean hasPermissions = PermissionsHelper.hasPermissions(this,
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION);
+        if (!hasPermissions) {
+            PermissionMessage permissionMessage =
+                    new PermissionMessage(Manifest.permission.ACCESS_FINE_LOCATION,
+                            getString(R.string.title_access_fine_location),
+                            getString(R.string.description_access_fine_location));
+            PermissionsHelper.addMessage(this, permissionMessage);
+            PermissionsHelper.checkAndAskForPermissions(this,
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION);
+        }
     }
 
     private boolean initSecureCredentials() {
@@ -166,10 +214,7 @@ public class MainActivity extends AppCompatActivity {
 
         if (!keyguardManager.isKeyguardSecure()) {
             // Show a message that the user hasn't set up a fingerprint or lock screen.
-            Toast.makeText(this,
-                    "Secure lock screen hasn't set up.\n"
-                            + "Go to 'Settings -> Security -> Fingerprint' to set up a fingerprint",
-                    Toast.LENGTH_LONG).show();
+            showNoFingerPrintAvailable("\nSecure lock screen hasn't set up.\n", "Go to 'Settings -> Security -> Fingerprint' to set up a fingerprint");
             unlockButton.setEnabled(false);
             lockButton.setEnabled(false);
             return true;
@@ -182,10 +227,7 @@ public class MainActivity extends AppCompatActivity {
         if (!fingerprintManager.hasEnrolledFingerprints()) {
             unlockButton.setEnabled(false);
             // This happens when no fingerprints are registered.
-            Toast.makeText(this,
-                    "Go to 'Settings -> Security -> Fingerprint' and register at least one" +
-                            " fingerprint",
-                    Toast.LENGTH_LONG).show();
+            showNoFingerPrintAvailable("Go to 'Settings -> Security -> Fingerprint' and register at least one", " fingerprint");
             return true;
         }
         createKey(DEFAULT_KEY_NAME, true);
@@ -196,18 +238,115 @@ public class MainActivity extends AppCompatActivity {
         return false;
     }
 
+    private void showNoFingerPrintAvailable(String s, String s2) {
+        MessagesUtil.showErrorMessage(this,
+                s +
+                        s2);
+    }
+
     private void initializeRestServices() {
+        Map<String, String> ssidToHost = getSSID2HostMap();
+        Set<String> blacklist = mSharedPreferences.getStringSet(BLACKLIST, new TreeSet<>());
+        String ssid = null;
         String defaultDesktop = getString(R.string.default_desktop);
         validateCredentials();
+        WifiManager wifiManager =
+                (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        WifiInfo wifiInfo;
+        boolean rememberSSID = mSharedPreferences.getBoolean(getString(R.string.remember_ssid),
+                false);
+        if(!rememberSSID) {
+            clearStoredHosts();
+        }
+
+        wifiInfo = wifiManager.getConnectionInfo();
+        if (wifiInfo.getSupplicantState() == SupplicantState.COMPLETED) {
+            ssid = wifiInfo.getSSID();
+            setCurrentSSID(ssid);
+            if (rememberSSID && StringUtils.isNotEmpty(ssid) && !UNKNOWN_SSID.equalsIgnoreCase(ssid)) {
+                if (ssidToHost.containsKey(ssid)) {
+                    defaultDesktop = ssidToHost.get(ssid);
+                    if (!blacklist.contains(defaultDesktop)) {
+                        MessagesUtil.showInfoMessage(this,
+                                String.format("\nReutilizando para SSID %s, host: %s", ssid,
+                                        defaultDesktop));
+                    } else {
+                        defaultDesktop = getNewDesktopURL(ssidToHost, ssid, defaultDesktop);
+                    }
+                } else {
+                    defaultDesktop = getNewDesktopURL(ssidToHost, ssid, defaultDesktop);
+                }
+            } else {
+                clearStoredHosts();
+                //mSharedPreferences.edit().putStringSet(BLACKLIST,new TreeSet<>()).commit();
+                defaultDesktop = getDesktopFromPreference(defaultDesktop);
+            }
+        }
+        createJokoService(defaultDesktop);
+        renewTokens();
+    }
+
+    private void clearStoredHosts() {
+        mSharedPreferences.edit().putStringSet(BLACKLIST, new TreeSet<>()).commit();
+        mSharedPreferences.edit().putString(MAP_SSID_TO_HOST,
+                new Gson().toJson(new HashMap<>())).commit();
+    }
+
+    private String getNewDesktopURL(Map<String, String> ssidToHost, String ssid, String defaultDesktop) {
+        defaultDesktop = getDesktopFromPreference(defaultDesktop);
+        ssidToHost.put(ssid, defaultDesktop);
+        mSharedPreferences.edit().putString(MAP_SSID_TO_HOST,
+                new Gson().toJson(ssidToHost)).commit();
+        return defaultDesktop;
+    }
+
+    private void setCurrentSSID(String ssid) {
+        this.currentSSID = ssid;
+    }
+
+    private String getDesktopFromPreference2(String defaultDesktop) {
         String baseUrlHash = mSharedPreferences
                 .getString(getString(R.string.host_selected), getString(R.string.default_desktop));
         if (mSharedPreferences.getBoolean(getString(R.string.use_default_desktop), false)) {
             String defaultHost = mSharedPreferences.getString(getString(R.string.default_desktop_flag), defaultDesktop);
-            createJokoService(defaultHost);
+            defaultDesktop = defaultHost;
         } else {
-            createJokoService(baseUrlHash);
+            defaultDesktop = baseUrlHash;
         }
-        renewTokens();
+        return defaultDesktop;
+    }
+
+    private String getDesktopFromPreference(String defaultDesktop) {
+        String desktop = getString(R.string.default_desktop);
+        Set<String> baseUrlHash = mSharedPreferences
+                .getStringSet(CrudHelper.DESKTOP_LIST, new HashSet<>(Arrays.asList(desktop)));
+        Set<String> blacklist = mSharedPreferences.getStringSet(BLACKLIST, new TreeSet<>());
+        Iterator<String> hosts = baseUrlHash.iterator();
+
+        while (hosts.hasNext()) {
+            String pair = hosts.next();
+            if (pair.indexOf('|') >= 0) {
+                String[] labelHost = pair.split("\\|");
+                desktop = labelHost[1];
+                if (!blacklist.contains(desktop)) {
+                    break;
+                } else {
+                    Log.d(TAG, String.format("Skipping blacklisted: %s", desktop));
+                }
+            }
+        }
+        return desktop;
+    }
+
+    private Map<String, String> getSSID2HostMap() {
+        String mapString = mSharedPreferences.getString(MAP_SSID_TO_HOST, "");
+        Type type = new TypeToken<HashMap<String, String>>() {
+        }.getType();
+        Map<String, String> map = new Gson().fromJson(mapString, type);
+        if (map == null) {
+            map = new HashMap<>();
+        }
+        return map;
     }
 
     private void renewTokens() {
@@ -217,29 +356,54 @@ public class MainActivity extends AppCompatActivity {
             response.enqueue(new Callback<LoginResponse>() {
                 @Override
                 public void onResponse(Call<LoginResponse> call, Response<LoginResponse> response) {
+                    String msg;
                     if (response.code() == 200 && response.isSuccessful()) {
                         LoginResponse loginResponse = response.body();
-                        Log.i(TAG, String.format("Request correctamente invocado HTTP CODE: %s", response.code()));
+                        msg = String.format("Request correctamente invocado HTTP CODE: %s", response.code());
+                        Log.i(TAG, msg);
                         mSharedPreferences.edit().putString(ACCESS_TOKEN, loginResponse.getSecret()).commit();
                         refreshToken();
                     } else {
-                        Log.i(TAG, String.format("No se pudo ejecutar correctamente el request. HTTP Code recibido: %s", response.code()));
+                        mSharedPreferences.edit().remove(ACCESS_TOKEN).commit();
+                        msg = String.format("No se pudo ejecutar correctamente el request. HTTP Code recibido: %s", response.code());
+                        Log.i(TAG, msg);
                     }
+                    getConsole().setText(msg);
                     Log.d(TAG, response.toString());
                 }
 
                 @Override
                 public void onFailure(Call<LoginResponse> call, Throwable t) {
                     Log.e(TAG, "No se pudo completar el request", t);
+                    mSharedPreferences.edit().remove(ACCESS_TOKEN).commit();
+                    if (t instanceof SocketTimeoutException) {
+                        getConsole().setText(t.getMessage());
+                        SocketTimeoutException exception = (SocketTimeoutException) t;
+                        Set<String> blacklist = mSharedPreferences.getStringSet("blacklist",
+                                new TreeSet<>());
+                        blacklist.add(getBaseURL());
+                        mSharedPreferences.edit().putStringSet(BLACKLIST, blacklist).commit();
+                    }
                 }
             });
         }
     }
 
+    private void setConsoleText(String message) {
+        console.setText(message);
+    }
+
+    private TextView getConsole() {
+        if (console == null) {
+            console = findViewById(R.id.console);
+        }
+        return console;
+    }
+
     public boolean needsToRenewToken(String preferenceName) {
         boolean renew = true;
         String accessToken = mSharedPreferences.getString(preferenceName, null);
-        if(StringUtils.isNotEmpty(accessToken)) {
+        if (StringUtils.isNotEmpty(accessToken)) {
             Date rightThisMinute = new Date();
             JWT jwt = new JWT(accessToken);
             renew = rightThisMinute.after(jwt.getExpiresAt());
@@ -249,7 +413,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void refreshToken() {
         String accessToken = mSharedPreferences.getString(ACCESS_TOKEN, null);
-        if(needsToRenewToken(REFRESH_TOKEN)) {
+        if (needsToRenewToken(REFRESH_TOKEN)) {
             Call<LoginResponse> refreshResponse = jokoBackendService.userAccess(accessToken);
             refreshResponse.enqueue(new Callback<LoginResponse>() {
                 @Override
@@ -258,8 +422,8 @@ public class MainActivity extends AppCompatActivity {
                         LoginResponse refreshResponse = response.body();
                         mSharedPreferences.edit().putString(REFRESH_TOKEN, refreshResponse.getSecret()).commit();
                         Log.i(TAG, String.format("Request correctamente invocado HTTP CODE: %s", response.code()));
-                        jokoToken = refreshResponse.getSecret();
                     } else {
+                        mSharedPreferences.edit().remove(REFRESH_TOKEN).commit();
                         Log.i(TAG, String.format("No se pudo ejecutar correctamente el request. HTTP Code recibido: %s", response.code()));
                     }
                     Log.d(TAG, response.toString());
@@ -268,6 +432,7 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void onFailure(Call<LoginResponse> call, Throwable t) {
                     Log.e(TAG, "No se pudo completar el request", t);
+                    mSharedPreferences.edit().remove(REFRESH_TOKEN).commit();
                 }
             });
         }
@@ -280,8 +445,7 @@ public class MainActivity extends AppCompatActivity {
                 .getString(getString(R.string.password), null);
 
         if (StringUtils.isEmpty(username) || StringUtils.isEmpty(password)) {
-            Toast.makeText(this, "Go to settings to add valid credentials",
-                    Toast.LENGTH_LONG).show();
+            MessagesUtil.showErrorMessage(this, "Go to settings to add valid credentials");
         }
     }
 
@@ -326,6 +490,7 @@ public class MainActivity extends AppCompatActivity {
                 .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
                 .client(httpClient.build())
                 .build();
+        setBaseURL(baseUrl);
         jokoBackendService = retrofit.create(JokoBackendService.class);
     }
 
@@ -371,28 +536,36 @@ public class MainActivity extends AppCompatActivity {
             }
         } else {
             // Authentication happened with backup password. Just show the confirmation message.
-            showConfirmation(null);
+            showConfirmation(null, true);
         }
     }
 
     // Show confirmation, if fingerprint was used show crypto information.
-    private void showConfirmation(byte[] encrypted) {
+    private void showConfirmation(byte[] encrypted, final boolean retryOn401) {
         Call<JokoBaseResponse> response;
         validateCredentials();
+        String jokoToken = mSharedPreferences.getString(REFRESH_TOKEN, null);
+        TextView textMessageLock = findViewById(R.id.locked_message);
+        TextView textMessageUnlock = findViewById(R.id.unlocked_message);
         if (isLocking()) {
             response = jokoBackendService.lockDesktop(jokoToken);
-            findViewById(R.id.confirmation_message).setVisibility(View.VISIBLE);
-            findViewById(R.id.unlocked_message).setVisibility(View.GONE);
+            textMessageUnlock.setVisibility(View.GONE);
+            textMessageLock.setVisibility(View.VISIBLE);
+            textMessageLock.setText(getString(R.string.unlocked, getCurrentSSID(), getBaseURL()));
         } else {
             response = jokoBackendService.unlockDesktop(jokoToken);
-            findViewById(R.id.confirmation_message).setVisibility(View.GONE);
-            findViewById(R.id.unlocked_message).setVisibility(View.VISIBLE);
+            textMessageLock.setVisibility(View.GONE);
+            textMessageUnlock.setVisibility(View.VISIBLE);
+            textMessageUnlock.setText(getString(R.string.locked, getCurrentSSID(), getBaseURL()));
         }
         response.enqueue(new Callback<JokoBaseResponse>() {
             @Override
             public void onResponse(Call<JokoBaseResponse> call, Response<JokoBaseResponse> response) {
                 if (response.code() == 200) {
                     Log.i(TAG, String.format("Request correctamente invocado HTTP CODE: %s", response.code()));
+                } else if (response.code() == 401 && retryOn401) {
+                    renewTokens();
+                    showConfirmation(encrypted, false);
                 } else {
                     Log.i(TAG, String.format("No se pudo ejecutar correctamente el request. HTTP Code recibido: %s", response.code()));
                 }
@@ -409,6 +582,10 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private String getCurrentSSID() {
+        return currentSSID;
+    }
+
     /**
      * Tries to encrypt some data with the generated key in {@link #createKey} which is
      * only works if the user has just authenticated via fingerprint.
@@ -416,10 +593,9 @@ public class MainActivity extends AppCompatActivity {
     private void tryEncrypt(Cipher cipher) {
         try {
             byte[] encrypted = cipher.doFinal(SECRET_MESSAGE.getBytes());
-            showConfirmation(encrypted);
+            showConfirmation(encrypted, true);
         } catch (BadPaddingException | IllegalBlockSizeException e) {
-            Toast.makeText(this, "Failed to encrypt the data with the generated key. "
-                    + "Retry the tahachi", Toast.LENGTH_LONG).show();
+            showNoFingerPrintAvailable("Failed to encrypt the data with the generated key. ", "Retry the tahachi");
             Log.e(TAG, "Failed to encrypt the data with the generated key." + e.getMessage());
         }
     }
@@ -489,6 +665,14 @@ public class MainActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
+    public void setBaseURL(String baseURL) {
+        this.baseURL = baseURL;
+    }
+
+    public String getBaseURL() {
+        return baseURL;
+    }
+
     private class LockUnlockButtonClickListener implements View.OnClickListener {
 
         private boolean lockingLocal;
@@ -504,7 +688,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onClick(View view) {
             setLocking(lockingLocal);
-            findViewById(R.id.confirmation_message).setVisibility(View.GONE);
+            findViewById(R.id.locked_message).setVisibility(View.GONE);
 
             // Set up the crypto object for later. The object will be authenticated by use
             // of the fingerprint.
@@ -654,4 +838,5 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         validateCredentials();
     }
+
 }

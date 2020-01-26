@@ -9,19 +9,19 @@
 
     <ImageButton
         android:id="@+id/unlock"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:contentDescription="@string/unlock"
         app:srcCompat="@drawable/unlock" />
 
     <ImageButton
         android:id="@+id/lock"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:contentDescription="@string/lock"
         app:srcCompat="@drawable/lock" />
     <TextView
-        android:id="@+id/confirmation_message"
+        android:id="@+id/locked_message"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
@@ -39,4 +39,13 @@
         android:textColor="?android:attr/colorAccent"
         android:text="@string/unlocked"
         android:visibility="gone"/>
+
+    <EditText
+        android:id="@+id/console"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ems="10"
+        android:gravity="start|top"
+        android:inputType="textMultiLine"/>
+
 </LinearLayout>

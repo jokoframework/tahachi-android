@@ -16,19 +16,19 @@
     </string>
     <string name="fingerprint_not_recognized">Fingerprint not recognized. Try again</string>
     <string name="fingerprint_success">Fingerprint recognized</string>
-    <string name="locked">Desktop locked</string>
-    <string name="unlocked">Desktop unlocked</string>
+    <string name="locked">Locking: SSID: %s - Host: %s</string>
+    <string name="unlocked">Unlocking:  SSID: %s - Host: %s</string>
     <string name="new_fingerprint_enrolled_description">A new fingerprint was added to this device, so your password is required.</string>
     <string name="use_fingerprint_in_future">Use fingerprint in the future</string>
     <string name="use_fingerprint_to_authenticate_title">Use fingerprint to authenticate</string>
-    <string name="use_fingerprint_to_authenticate_key" >use_fingerprint_to_authenticate_key</string>
+    <string name="use_fingerprint_to_authenticate_key">use_fingerprint_to_authenticate_key</string>
     <string name="description_bugdroid_icon">Android bugdroid image</string>
     <string name="description_fingerprint_icon">Fingerprint icon</string>
     <string name="valid_token">valid_token</string>
     <string name="host_selected">host_selected</string>
     <string name="default_desktop_flag">default_desktop_flag</string>
     <string name="use_default_desktop">use_default_desktop</string>
-    <string name="default_desktop">https://10.1.1.149:8443</string>
+    <string name="default_desktop">https://192.168.9.57:8443</string>
     <string name="valid_token_label">Enter a valid backend acccess JWT</string>
     <string name="host_label">Host</string>
     <string name="select_desktop_label">Pick your Desktop</string>
@@ -38,6 +38,7 @@
     <string name="password">password_jwt</string>
     <string name="username_description">Username</string>
     <string name="credentials">Login Credentials</string>
+    <string name="title_activity_host_list">HostListActivity</string>
     <string-array name="trustedHosts">
         <item>https://192.168.9.57:8443</item>
         <item>https://127.0.0.1:8443</item>
@@ -50,5 +51,16 @@
         <item>localhost-ip</item>
         <item>Sodep</item>
     </string-array>
+
+    <string name="permissions_dialog_title">Conceder Permisos</string>
+    <string name="permissions_dialog_text">Tahachi needs some permissions.</string>
+    <string name="grant_permission">Conceder</string>
+    <string name="prompt_accept">Aceptar</string>
+    <string name="prompt_cancel">Cancelar</string>
+    <string name="title_access_fine_location">Permission to access location</string>
+    <string name="description_access_fine_location">Tahachi requires location access to remember what IP Address you use in every WIFI. This information is stored only locally, is never shared.</string>
+    <string name="remember_ssid">remember_ssid</string>
+    <string name="remember_ssid_title">Remember Desktop by Wifi SSID</string>
+    <string name="console">Console</string>
 
 </resources>

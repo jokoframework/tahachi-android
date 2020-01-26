@@ -20,28 +20,29 @@
         android:persistent="true"
         android:title="@string/use_fingerprint_to_authenticate_title" />
     <CheckBoxPreference
-        android:key="@string/use_default_desktop"
+        android:defaultValue="true"
+        android:key="@string/remember_ssid"
         android:persistent="true"
-        android:title="@string/use_only_default_label_label" />
-    <EditTextPreference
-        android:key="@string/default_desktop_flag"
-        android:persistent="true"
-        android:title="@string/default_host_label" />
-    <EditTextPreference
-        android:key="@string/valid_token"
-        android:persistent="true"
-        android:title="@string/valid_token_label" />
+        android:title="@string/remember_ssid_title" />
+    <Preference
+        android:summary="Edit your desktops server addresses"
+        android:title="Desktop list">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="io.github.jokoframework.tahachi.activity.HostListActivity"
+            android:targetPackage="io.github.jokoframework.tahachi" />
+    </Preference>
     <PreferenceCategory android:title="@string/credentials">
         <EditTextPreference
+            android:inputType="text"
             android:key="@string/username"
             android:persistent="true"
-            android:title="@string/username_description"
-            android:inputType="text"/>
+            android:title="@string/username_description" />
         <EditTextPreference
+            android:inputType="textPassword"
             android:key="@string/password"
             android:persistent="true"
-            android:title="@string/password_description"
-            android:inputType="textPassword"/>
+            android:title="@string/password_description" />
     </PreferenceCategory>
     <PreferenceCategory android:title="@string/host_label">
         <ListPreference
