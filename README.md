@@ -23,19 +23,16 @@ It connects to a REST-API using JWT and self-signed certificate.
  4. SSL pinning. See `xml/network_security_config.xml`
  5. Settings: 
   
-  5.1 Valid backend credentials (user/password)
-  
-  5.2 Default host or
-  
-  5.3 List of trusted desktops in `"@array/trustedHosts`
+    5.1 Valid backend credentials (user/password)
+    5.2 Default host or
+    5.3 List of hosts can be added/edited manually
 
 
 ## TODO
 
-1. Automatically select desktop's IP address matching connected Wifi SSID
-2. Better graphics and UX
-3. Handle edge conditions/errors more gracefully
-4. Update to [Android Q Biometrics capabilities](https://source.android.com/security/biometric/)
+1. Better graphics and UX
+2. Handle edge conditions/errors more gracefully
+3. Update to [Android Q Biometrics capabilities](https://source.android.com/security/biometric/)
 
  * Based on [Android example](https://github.com/googlearchive/android-FingerprintDialog)
  
